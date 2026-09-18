@@ -162,7 +162,7 @@ standing mount 也按文件戳失效。
 文档的目标是固定约 100K 的峰值窗口。DSH 的压缩阈值是**比例**而非绝对值，所以按路由的上下文窗口反算：
 
 ```
-thresholdRatio 0.1  × 1,000,000 ≈ 100K   触发压缩的表面 token（文档的峰值窗口）
+thresholdRatio 0.1  × 1,000,000 ≈ 100K   触发压缩的注入 token（含系统提示与工具 schema）
 retainRatio    0.05 × 1,000,000 ≈  50K   压缩后逐字保留的近期上下文
 maxTokens 4096                           摘要本身的上限（文档的有界 step log）
 ```
@@ -178,6 +178,34 @@ maxTokens 4096                           摘要本身的上限（文档的有界
 ```
 
 唯一约束是 `retainTokens` 必须小于该模型上的 `thresholdTokens`（`0.3 × 窗口 ≥ 24000`，即窗口 ≥ 80K 时成立）。
+
+### 这个 100K 是「完整注入量」，不是消息预算
+
+`compaction-basic` 比的是 `dsh-token-meter` 的 `measure(session)`，它的语义是**给下一次请求定价**：
+
+- 基线优先取上一次响应的**真实 usage**（`inputTokens + cacheReadTokens + cacheWriteTokens + outputTokens`），
+  只有真实值低于启发式估计时才退回估计——基线不会低估；
+- 系统提示在 surface 里是 `system/message` 节点，工具 schema 由 `estimateToolsTokens(header)` 单独计价。
+  所以 **系统提示 + 工具 schema + 全部消息** 都算在这 100K 里。
+
+本机实测（一份 35 个工具的 agent 组成）：系统提示 21.2 KB ≈ 5.3K token、工具 schema 34 KB ≈ 8.5K token，
+固定开销约 **13.8K token**；同一会话第一条请求的真实 prompt 是 14,581 token，与这个量级吻合。
+**留给消息的大约只有 86K。**
+
+### 真实峰值比触发线高多少
+
+阈值检查在每个 step 边界做，判的是**下一次请求的预测值**，所以真正发出去的请求都挡在 100K 以下。
+超出部分只来自「上一次响应之后新增的内容」——这一段是启发式估计（`CHARS_PER_TOKEN = 4`）：
+
+- 英文与 JSON 上这个常数是准的（上面工具 schema 估 8.5K，与实际同量级）；
+- 中文按「4 字符 = 1 token」算会**低估约 2~4 倍**（中文实际约 1 token / 1~2 字），
+  所以一步里塞进多个中文工具结果时，真实 prompt 会比预测高几 K。
+
+结论：**峰值 ≈ 100K + 单步几 K**（最坏十几 K），不是无界增长。再往上还有兜底：
+provider 明确报 context overflow 时会绕过阈值强制压缩一次。
+
+顺带一提：缓存命中的部分**同样计入**这 100K。persona 整段命中缓存只把单价降到约十分之一，
+并不减少 token 数——「100K」是体积上限，「便宜」是另一回事。
 
 ## 不影响其他模式
 
