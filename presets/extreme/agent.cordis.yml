@@ -37,11 +37,12 @@
       - Facts only. Never quote a tool result back and never restate a file, a diff, or a command's output. Keep identifiers, numbers, paths, and verdicts; drop the prose around them.
       - English, at most 40 words. Every line you write for your own future use — a status line, a summary, a note to a later step — is English, at most 40 words, facts and IDs only, no reasoning. Longer reasoning is for this turn alone and must not be carried forward.
       - State over history. The todo list is the canonical state store: send the entire list each time so it overwrites rather than appends, keep it to at most seven items, and never re-derive progress from earlier messages.
-      - Summaries beat re-reads. Before re-reading anything, ask whether a note you already wrote answers the question. Read ranges (offset/limit, sed -n) instead of whole files; pipe wide output through head/tail; search before you list.
+      - Never read blind, and never read wide. Locate first (grep -n, glob, wc -l), then read the smallest window that answers the question: offset/limit, sed -n 'A,Bp'. Target at most about 60 lines or 4 KB per read. If the answer is not in that window, narrow it and read again — widening the read is the failure mode, not the fix. Before re-reading anything, ask whether a note you already wrote answers it.
+      - Bound every output before it enters context. Never let a command print an unbounded amount: probe with wc -l, head -n 20, or grep -c first, then print only the slice you need (sed -n 'A,Bp', head/tail, grep -n). Cap one command's output at about 4 KB. Every byte you print stays in context verbatim for the rest of the session.
       - Batch. Independent tool calls belong in one step: one step with five reads costs far less context than five steps.
       - Stable prefix. Your instructions and the tool catalog are fixed for this session. Never ask for them to be repeated, never rewrite them, and never restate this contract in your output.
 
-      The harness already bounds you: over-long tool results are pruned to their head and tail, and old context is compacted into a short summary. Treat both as normal. When you need a pruned middle or a compacted detail again, fetch exactly that range instead of asking for the whole thing.
+      The harness bounds you later, not now: old context is compacted into a short summary, and only as part of that compaction are over-long tool results cut to their head and tail. Until then everything you printed is still there, verbatim. When you need a pruned middle or a compacted detail, fetch exactly that range instead of asking for the whole thing.
 
       Deliberate trade-off of this mode: raw content older than the retained window is gone. If exact recall of everything you saw matters more than context economy, say so and the user can switch back to 标准模式.
     suffix: Your working directory is {{cwd}}.
@@ -105,7 +106,9 @@
 #       >50KB 的结果：内层宿主先落盘一次（工件 A = 全文），本行再把那份预览收口到
 #                       ≤12KB（工件 B，含 A 的 locator）——多一跳，但全文仍可达
 #       12KB~50KB 的结果：宿主那层不触发，本行落盘一次，一跳
-#     模型眼前的结果因此始终 ≤12KB，再被 tool-result-pruner 压到头 1024/尾 512 字符。
+#     模型眼前的结果因此始终 ≤12KB。但要注意 pruner **不是每步都跑**：`compaction-basic`
+#     只在 `compactIfNeeded()` 内部调用 `pruneSession()`，所以「只留头 1024/尾 512 字符」
+#     在压缩发生之前不会发生 —— 没有压缩的会话里，12KB 以下的结果原样留到最后。
 - id: spill-policy
   name: '@deepseek-ai/dsh-spill-policy'
   config:
