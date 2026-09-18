@@ -1,0 +1,23 @@
+# dsh-extreme-preset —— 把一个 agent preset 交给 preset roster 的 bundle layer。
+#
+# 本插件不注册任何服务、工具行或模型工具，只给宿主那一行 `agent-presets` 补一个只读根，
+# 指向包内的 `presets/`（里面是「极压模式」，preset id `extreme`）。
+#
+# 两处刻意的写法：
+#
+# 1. loader 对 `- id: <row>` 的 config 补丁是**整段替换**，不是深合并
+#    （`dsh --profile web --patch <本文件> --dump-config` 实测：只给 roots 时，原来的
+#    `default: standard` 会消失）。所以这里把 `default` 一并写全，否则该行的必填项会丢。
+#
+# 2. 根的 trust 用 `system`（只读），不是 `user`：`copy()` 新建 preset 时取的是
+#    **第一个** `user` 根（`$DSH_HOME/.agent-presets`），用 user 会把作者目录抢到插件里；
+#    用 system 同时让插件里的 preset 不能被 preset 界面删除。
+#
+# `dshHomePath` 是 loader 求值上下文提供的助手（dsh-base 自己的补丁就用它定位
+# sessions/ 与 storages/），所以这里不需要硬编码 /root/.dsh。
+- id: agent-presets
+  config:
+    default: standard
+    roots:
+      - path: !!js dshHomePath('plugin-src/dsh-extreme-preset/presets')
+        trust: system

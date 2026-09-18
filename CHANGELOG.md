@@ -1,11 +1,23 @@
 # 更新记录
 
-## 未发布
+## v1.1.0 — 2026-09-18
 
-- docs: 澄清「约 100K」的口径——它是**下一次请求的完整注入量**（系统提示 + 工具 schema + 消息，
-  由 `dsh-token-meter` 按真实 usage 定价），并且真实峰值会比触发线高「单步几 K」：
-  阈值检查发生在 step 边界、判的是下一次请求的预测值，其中只有「上次响应之后新增的内容」
-  走启发式估计（`CHARS_PER_TOKEN = 4`，对中文低估约 2~4 倍）。详见 README。
+**本仓库现在同时是一个 DSH 插件包**：新增 `package.json`（声明 `dsh.bundle.patch`）与
+`cordis.patch.yml`，preset 本体移到 `presets/extreme/`。于是它可以从 GitHub 直接装进 DSHA 的
+插件系统——插件页勾选/取消勾选即可装卸，不必手工往 `.agent-presets/` 拷目录。
+
+- `cordis.patch.yml` 只改宿主一行：给 `agent-presets` 补 `roots`（包内 `presets/`，`trust: system`）。
+  该行的 config 补丁在 loader 里是**整段替换**（用 `dsh --profile web --patch … --dump-config` 实测确认），
+  所以 `default: standard` 一并写全，否则该行的必填项会丢。
+- 根的 trust 用 `system`（只读）而不是 `user`：`copy()` 新建 preset 取的是第一个 `user` 根
+  （`$DSH_HOME/.agent-presets`），不能把它抢走；顺带让插件里的 preset 不能被 preset 界面删除。
+- **文档**：README 开头补「好处与代价」；「约 100K」澄清为**下一次请求的完整注入量**
+  （系统提示 + 工具 schema + 消息；本机实测固定开销 ≈13.8K token、留给消息约 86K），
+  真实峰值 = 触发线 + 单步几 K（中文增量被 `CHARS_PER_TOKEN = 4` 低估约 2~4 倍）。
+- **手装路径变了**：仓库根不再是 preset 目录，老命令 `git clone … .agent-presets/extreme` 不再成立；
+  README 给的是「克隆后把 `presets/extreme` 拷进用户根」的新命令。
+
+preset 本体（`presets/extreme/agent.cordis.yml`）与 v1.0.0 逐字相同，一行未改。
 
 ## v1.0.0 — 2026-09-18
 

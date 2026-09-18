@@ -5,9 +5,11 @@
 把随发行版附带的「标准模式」（preset id `standard`）按《极致上下文管理插件 · 精简方案》的
 S0–S6 布局重新调参：**把每一步都要重发的上下文压到约 100K，并约束模型自己写下的字**。
 
-> 这是 **preset（会话组成）**，不是插件（bundle）。它不装新包、不改宿主组成，
-> 全部内容就是一份 `agent.cordis.yml` 里的 `config` 值加一段 persona 文本。
-> 所以它既不需要重启，也不可能因为它的存在让别的模式变得不一样。
+> 「极压模式」本身是 **preset（会话组成）**：一份 `agent.cordis.yml` 里的 `config` 值加一段 persona 文本，
+> 不装新包、不改宿主组成，所以它不可能让别的模式变得不一样。
+>
+> 本仓库另外提供一层 **插件包外壳**（`package.json` + `cordis.patch.yml`），让这份 preset 能从 GitHub
+> 直接装进 DSHA 的插件系统。那层插件只做一件事：给 `agent-presets` 补一个只读根。见「安装」。
 
 ## 好处与代价
 
@@ -38,12 +40,38 @@ S0–S6 布局重新调参：**把每一步都要重发的上下文压到约 100
 
 ## 安装
 
-preset 就是一个目录。DSH 从 `<dshHome>/.agent-presets/`（默认 `~/.dsh/.agent-presets/`）扫描本机 preset，
-目录名就是 preset id：
+### 首选：作为 DSHA 插件装（从 GitHub 直接安装，可勾选、可卸载）
+
+本仓库同时是一个 **DSH 插件包**：仓库根有 `package.json`（声明 `dsh.bundle.patch`）、
+`cordis.patch.yml`，preset 本体在 `presets/extreme/`。它不注册任何服务或工具，
+全部内容就是给宿主那一行 `agent-presets` 补一个只读根：
+
+```yaml
+- id: agent-presets
+  config:
+    default: standard
+    roots:
+      - path: !!js dshHomePath('plugin-src/dsh-extreme-preset/presets')
+        trust: system
+```
+
+在 DSHA 插件页填仓库地址安装（命令行为
+`python3 "$DSH_HOME/plugin-manager.py" github liancha22 dsh-extreme-preset`），
+然后**勾选**它 → **重启 Web**（profile 补丁只在启动时应用）→ **新建**会话选「极压模式」。
+卸载＝取消勾选，preset 随之从选择器里消失。
+
+> 插件的根用 `trust: system`（只读），所以它不会抢走 `copy()` 新建 preset 用的可写用户根，
+> 插件里的 preset 也不能被 preset 界面删除。
+
+### 备选：只装 preset 本体（不走插件）
+
+preset 就是一个目录，目录名就是 preset id。克隆后把 `presets/extreme/` 拷进用户根：
 
 ```bash
-git clone https://github.com/liancha22/dsh-extreme-preset.git \
-  "${DSH_HOME:-$HOME/.dsh}/.agent-presets/extreme"
+git clone --depth 1 https://github.com/liancha22/dsh-extreme-preset.git /tmp/dsh-extreme-preset
+dest="${DSH_HOME:-$HOME/.dsh}/.agent-presets"
+mkdir -p "$dest"
+cp -a /tmp/dsh-extreme-preset/presets/extreme "$dest/extreme"
 ```
 
 不想用 git（没有 SSH key 也行）：
@@ -52,14 +80,18 @@ git clone https://github.com/liancha22/dsh-extreme-preset.git \
 dest="${DSH_HOME:-$HOME/.dsh}/.agent-presets"
 mkdir -p "$dest"
 tmp=$(mktemp -d)
-curl -sL https://github.com/liancha22/dsh-extreme-preset/archive/refs/tags/v1.0.0.tar.gz | tar -xz -C "$tmp"
-mv "$tmp"/dsh-extreme-preset-1.0.0 "$dest/extreme"
+curl -sL https://github.com/liancha22/dsh-extreme-preset/archive/refs/tags/v1.1.0.tar.gz | tar -xz -C "$tmp"
+cp -a "$tmp"/dsh-extreme-preset-1.1.0/presets/extreme "$dest/extreme"
 ```
 
 然后**新建**会话时在 preset 选择器里选「极压模式」即可。不需要重启：roster 每次读取都重新扫描该目录，
 standing mount 也按文件戳失效。
 
 > 只有空会话能切换 preset（换了工具组成会让历史里的工具调用对不上），所以是「新建时选」，不是「中途切」。
+
+> ⚠️ 两条路都走会**同 id**（`extreme`）。插件那份属于「配置根」，优先级高于用户根，
+> 也就是**插件那份生效**，用户根那份被 shadow。只想留一份：用插件就别往 `.agent-presets/` 拷，
+> 用拷贝就别勾选插件。
 
 ## 它改了什么（七处，其余与标准模式逐字相同）
 
