@@ -247,11 +247,19 @@ provider 明确报 context overflow 时会绕过阈值强制压缩一次。
 
 ## 卸载
 
+**插件装的**：插件页取消勾选（命令行为
+`python3 "$DSH_HOME/register-builtin-plugins.py" --disable dsh-extreme-preset`），重启 Web。
+preset 随之从选择器里消失。
+
+**手装的**（拷进用户根的那份）：
+
 ```bash
 rm -rf "${DSH_HOME:-$HOME/.dsh}/.agent-presets/extreme"
 ```
 
 目录就是全部状态。已运行的会话挂的是各自的 composition generation，不受影响。
+
+> 两处同名时以**插件那份**为准：只取消勾选、不删用户根那份的话，「极压模式」还在（来自用户根）。
 
 ## 验证记录
 
