@@ -22,9 +22,11 @@ git clone https://github.com/liancha22/dsh-extreme-preset.git \
 不想用 git（没有 SSH key 也行）：
 
 ```bash
+dest="${DSH_HOME:-$HOME/.dsh}/.agent-presets"
+mkdir -p "$dest"
 tmp=$(mktemp -d)
 curl -sL https://github.com/liancha22/dsh-extreme-preset/archive/refs/tags/v1.0.0.tar.gz | tar -xz -C "$tmp"
-mv "$tmp"/*/ "${DSH_HOME:-$HOME/.dsh}/.agent-presets/extreme"
+mv "$tmp"/dsh-extreme-preset-1.0.0 "$dest/extreme"
 ```
 
 然后**新建**会话时在 preset 选择器里选「极压模式」即可。不需要重启：roster 每次读取都重新扫描该目录，
