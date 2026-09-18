@@ -1,6 +1,6 @@
 {
   "name": "dsh-extreme-preset",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "DSH 插件：把 agent preset「极压模式」（约 100K 注入预算 + 输出纪律）装进 preset roster。只补 agent-presets 一行的 roots，不注册任何服务或工具。",
   "license": "MIT",
   "files": [
