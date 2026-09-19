@@ -4,12 +4,13 @@
 # 两件事：上下文预算（每步重发的量）和输出纪律（模型自己写下的字）。
 # 依据《极致上下文管理插件 · 精简方案》的 S0–S6 布局；逐段映射见同目录 README.md。
 #
-# 与 standard 的差异，一共六处：
+# 与 standard 的差异，一共七处：
 #   S0  persona              追加极压契约（英文、稳定前缀、可整段命中缓存）
 #   S2  agent-instructions   注入预算 maxBytes 65536 → 16384
 #   S3  tool-todo            单活动项，todo 列表成为唯一的覆盖式状态存储
 #   S4  compaction-basic     阈值 0.8 → 0.1，保留 0.16 → 0.05，摘要 8192 → 4096 token
 #   S6  tool-result-pruner   阈值 8192 → 4096 字符，头 4096 → 1024，尾 1024 → 512
+#   S6  tool-fs              单次 read 上限 2000 行/50KB → 300 行/8KB，每行 2000 → 1000 字符
 #   S6  tool-fs-search       glob/grep/meta 上限收紧
 #
 # 其余每一行——包括两处 `disabled: true` 的 codex/claude-code 占位——都逐字保留，
@@ -74,6 +75,13 @@
 # they need no realm. The `fs` service and its policy stay in the host.
 - id: tool-fs
   name: '@deepseek-ai/dsh-tool-fs'
+  # read 是唯一不被 spill 收口的结果（`spill-policy` 主动跳过 `read`，避免
+  # `read → spill → 再 read` 的死循环），所以它的笼子只能在这里。默认值是
+  # 2000 行 / 50 KB / 每行 2000 字符 —— 一次 read 就能把 50 KB 原样带进上下文。
+  config:
+    readLimit: 300
+    readMaxBytes: 8192
+    readMaxLineLength: 1000
 
 # 极压收紧点：一次 glob/grep 能把多少结果带回上下文。
 #   globMaxResults     100 → 50
@@ -105,15 +113,17 @@
 #   * 同一份结果会有两层，顺序由注册顺序决定（`prepend` 就是 `unshift`：宿主先注册、
 #     本行后注册，所以本行在外层，先 `next()` 拿到内层结果再收口）：
 #       >50KB 的结果：内层宿主先落盘一次（工件 A = 全文），本行再把那份预览收口到
-#                       ≤12KB（工件 B，含 A 的 locator）——多一跳，但全文仍可达
-#       12KB~50KB 的结果：宿主那层不触发，本行落盘一次，一跳
-#     模型眼前的结果因此始终 ≤12KB。但要注意 pruner **不是每步都跑**：`compaction-basic`
-#     只在 `compactIfNeeded()` 内部调用 `pruneSession()`，所以「只留头 1024/尾 512 字符」
-#     在压缩发生之前不会发生 —— 没有压缩的会话里，12KB 以下的结果原样留到最后。
+#                       ≤4KB（工件 B，含 A 的 locator）——多一跳，但全文仍可达
+#       4KB~50KB 的结果：宿主那层不触发，本行落盘一次，一跳
+#     模型眼前的结果因此 ≤4KB（预览＝头 2KB + 尾 2KB + locator 提示 + 「省略了多少字节」）。
+#     两个例外：
+#       * `read` 被 spill 主动跳过（见上面 tool-fs 的 readMaxBytes），只受工具自身上限约束；
+#       * pruner **不是每步都跑**：`compaction-basic` 只在 `compactIfNeeded()` 内部调用
+#         `pruneSession()`，所以「只留头 1024/尾 512 字符」在压缩发生之前不会发生。
 - id: spill-policy
   name: '@deepseek-ai/dsh-spill-policy'
   config:
-    maxInlineBytes: 12000
+    maxInlineBytes: 4000
 
 # ── background jobs ────────────────────────────────────────────────────────
 
